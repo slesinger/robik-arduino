@@ -175,8 +175,9 @@ endif
 ARDUINOCONST ?= 100
 
 # default path for avr tools
-AVRTOOLSPATH ?= $(subst :, , $(PATH)) $(ARDUINODIR)/hardware/tools \
-	$(ARDUINODIR)/hardware/tools/avr/bin
+#AVRTOOLSPATH ?= $(subst :, , $(PATH))  $(ARDUINODIR)/hardware/tools \
+#	$(ARDUINODIR)/hardware/tools/avr/bin
+AVRTOOLSPATH := /opt/avr8-gnu-toolchain-linux_x86_64/bin
 
 # default path to find libraries
 LIBRARYPATH ?= libraries $(SKETCHBOOKDIR)/libraries $(ARDUINODIR)/libraries
@@ -301,7 +302,7 @@ CPPFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums
 CPPFLAGS += -mmcu=$(BOARD_BUILD_MCU)
 CPPFLAGS += -DF_CPU=$(BOARD_BUILD_FCPU) -DARDUINO=$(ARDUINOCONST)
 CPPFLAGS += -DUSB_VID=$(BOARD_USB_VID) -DUSB_PID=$(BOARD_USB_PID)
-CPPFLAGS += -I. -Iutil -Iutility -I $(ARDUINOCOREDIR)
+CPPFLAGS += -I. -I /usr/lib/avr/include -I $(ARDUINOCOREDIR)
 CPPFLAGS += -I $(ARDUINODIR)/hardware/arduino/variants/$(BOARD_BUILD_VARIANT)/
 CPPFLAGS += $(addprefix -I , $(LIBRARYDIRS))
 CPPDEPFLAGS = -MMD -MP -MF .dep/$<.dep

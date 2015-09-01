@@ -29,6 +29,7 @@
 #include "robik.h"
 #include "robot_config.h"
 #include "robik_api.h"
+//#include "Arduino.h"
 
 
 ros::NodeHandle nh;
@@ -39,6 +40,8 @@ void velocityMessageListener(const geometry_msgs::Twist& msg);
 ros::Subscriber<robik::GenericControl> sub_generic_control("robik_generic_control", &genericMessageListener);
 ros::Subscriber<robik::ArmControl> sub_arm_control("robik_arm_control", &armMessageListener);
 ros::Subscriber<geometry_msgs::Twist> sub_velocity_control("robik_velocity_control", &velocityMessageListener);
+void setArmPower(bool status);
+bool getArmPower();
 
 robik::GenericStatus status_msg;
 ros::Publisher pub_status("robik_status", &status_msg);
@@ -97,6 +100,11 @@ estimated_pos_t estimated_clamp_pos;
 void refreshMotorJoints();
 unsigned long arm_enabled_time = 0;
 unsigned long arm_disabled_time = 1;
+uint32_t old_clamp = 0;
+uint32_t old_roll = 0;
+uint32_t old_elbow = 0;
+uint32_t old_shoulder = 0;
+uint32_t old_yaw = 0;
 
 //move.h
 void intr_left_encoder();
