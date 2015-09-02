@@ -44,14 +44,14 @@
 #define ARM_RES_MIN_YAW 424
 #define ARM_RES_MAX_YAW 111
 
-//Init values (parked arm)  //TODO update values after calibration, this was just estimation
-#define ARM_RES_INIT_CLAMP 180
-#define ARM_RES_INIT_ROLL 310
+//Init ohm values (parked arm)  //TODO update values after calibration, this was just estimation
+#define ARM_RES_INIT_CLAMP 202
+#define ARM_RES_INIT_ROLL 291
 #define ARM_RES_INIT_ELBOW 545
-#define ARM_RES_INIT_SHOULDER 250
-#define ARM_RES_INIT_YAW 400
+#define ARM_RES_INIT_SHOULDER 264
+#define ARM_RES_INIT_YAW 393
 
-//Hodnoty degrees
+//degrees
 #define ARM_DEG_MIN_CLAMP 0		//0.0
 #define ARM_DEG_MAX_CLAMP 40		//0.052 RAD
 #define ARM_DEG_MIN_ROLL -90		//-1.571
