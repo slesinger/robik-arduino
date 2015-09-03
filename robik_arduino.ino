@@ -409,6 +409,7 @@ void loop() {
 		status_msg.ultrasound_Back = ultrasoundBack;
 
 		//arm
+		status_msg.arm_enabled = getArmPower();
 		status_msg.arm_yaw = servoSenseMedian_yaw.getMedian();
 		status_msg.arm_shoulder = servoSenseMedian_shoulder.getMedian();
 		status_msg.arm_elbow = servoSenseMedian_elbow.getMedian();
@@ -441,8 +442,8 @@ void loop() {
 		pub_status.publish(&status_msg);
 		status_msg_clean();
 
-		//check arm power timeout
-		if (arm_enabled_time != 0 && (arm_enabled_time + ARM_TIME_MAX_ENABLED) < millis()) {
+		//check arm power timeout to prevent overheat
+		if ( (getArmPower() == true) && ((arm_enabled_time + ARM_TIME_MAX_ENABLED) < millis()) ) {
 			setArmPower(false);
 		}
 		
@@ -654,7 +655,7 @@ void setDPin(const robik::GenericControl& msg) {
 }
 
 bool getArmPower() {
-	return (digitalRead(PIN_RELAY) == HIGH) ? true : false;
+	return (arm_enabled_time != 0) ? true : false;
 }
 void setArmPower(bool state) {
 	if (state) {
@@ -774,16 +775,21 @@ void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow, uint32_t sh
 	String arm_yaw = "";
 	
 	//if arm power is off but a move request is received, enable power
-	if (!getArmPower() &&
+	if ( (getArmPower() == false) && 
 		(old_clamp != clamp ||
 		old_roll != roll ||
 		old_elbow != elbow ||
 		old_shoulder != shoulder ||
 		old_yaw != yaw)
-		)
+	    )
 	{
-		setArmPower(true);	
+		setArmPower(true);
 	}
+	old_clamp = clamp;
+	old_roll = roll;
+	old_elbow = elbow;
+	old_shoulder = shoulder;
+	old_yaw = yaw;
 	
 	String time_to_complete_str = String(time_to_complete, DEC);
 	if (clamp != 0) {
