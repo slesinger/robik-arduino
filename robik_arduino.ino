@@ -22,10 +22,10 @@
 #include "CalLib.h"
 #include <EEPROM.h>
 #include <ros.h>
-#include "geometry_msgs/Twist.h"
 #include "robik/GenericStatus.h"
 #include "robik/GenericControl.h"
 #include "robik/ArmControl.h"
+#include "robik/VelocityControl.h"
 #include "robik.h"
 #include "robot_config.h"
 #include "robik_api.h"
@@ -36,10 +36,10 @@ ros::NodeHandle nh;
 
 void genericMessageListener(const robik::GenericControl& msg);
 void armMessageListener(const robik::ArmControl& msg);
-void velocityMessageListener(const geometry_msgs::Twist& msg);
+void velocityMessageListener(const robik::VelocityControl& msg);
 ros::Subscriber<robik::GenericControl> sub_generic_control("robik_generic_control", &genericMessageListener);
 ros::Subscriber<robik::ArmControl> sub_arm_control("robik_arm_control", &armMessageListener);
-ros::Subscriber<geometry_msgs::Twist> sub_velocity_control("robik_velocity_control", &velocityMessageListener);
+ros::Subscriber<robik::VelocityControl> sub_velocity_control("robik_velocity_control", &velocityMessageListener);
 void setArmPower(bool status);
 bool getArmPower();
 
@@ -825,8 +825,11 @@ void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow, uint32_t sh
 
 }
 
-void velocityMessageListener(const geometry_msgs::Twist& msg) {
-	velocity_control_VelTh(msg.linear.x, msg.angular.z);
+//Input received from diff_drive_controller
+void velocityMessageListener(const robik::VelocityControl& msg) {
+	req_motor_left = constrain(msg.motor_left, -MAX_VEL, MAX_VEL);
+	req_motor_right = constrain(msg.motor_right, -MAX_VEL, MAX_VEL);
+	velocity_control_LR();
 }
 
 // vel: linear velocity [m/sec]
@@ -875,7 +878,7 @@ void velocity_control_LR() {
 	    ||
 	     (req_motor_left == 0 && req_motor_right == 0)
 	) {
-		//remove correction, use only estimated speeds for new velocity command
+		//remove correction, for new velocity command use only estimated speeds
 		old_motor_left = req_motor_left;
 		old_motor_right = req_motor_right;
 		millis_since_cmd = millis();
