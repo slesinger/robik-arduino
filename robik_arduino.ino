@@ -81,7 +81,6 @@ void echoCheck();
 RTIMU *imu;                                           // the IMU object
 RTIMUSettings settings;                               // the settings object
 void read_IMU();
-void clean_IMU();
 
 //Lidar
 unsigned int ranges[360];
@@ -89,7 +88,7 @@ boolean lidar_complete;
 unsigned char Data_status=0;
 unsigned char Data_4deg_index=0;
 unsigned char Data_loop_index=0;
-unsigned char SpeedRPHhighbyte=0; // 
+unsigned char SpeedRPHhighbyte=0;
 unsigned char SpeedRPHLowbyte=0;
 int SpeedRPH=0;
 
@@ -98,7 +97,6 @@ int SpeedRPH=0;
 
 unsigned long lastDisplay;
 unsigned long lastRate;
-int sampleCount = 0;
 
 //determine the sign of a value
 template <typename type>
@@ -175,6 +173,7 @@ void init_variables() {
 	estimated_clamp_pos.corrected = false;
 
 	status_msg.status_code = (int32_t *) malloc(20 * sizeof(int32_t));
+	status_msg.lidar_data = (byte *) malloc(360 * sizeof(byte));
 }
 
 void log_string(String str) {
@@ -209,8 +208,8 @@ void status_msg_clean () {
 	charBuf[0] = '\0';
 	status_msg.log_count = 0;
 	status_msg.status_code_length = 0;
+	status_msg.lidar_data_length = 0;
 	status_msg.status_param_length = 0;
-	clean_IMU();
 }
 
 void add_status_code (int32_t code) {
@@ -274,11 +273,11 @@ void setup() {
 
 	//Lidar
 	lidar_complete = false;
-	Serial3.begin(115200);  // XV-11 LDS data 
+	Serial2.begin(115200);  // XV-11 LDS data 
 
 
 	//ROS node
-	nh.getHardware()->setBaud(115200); //57600 115200
+	nh.getHardware()->setBaud(500000); //57600 115200 500000
 	nh.initNode();
 	nh.subscribe(sub_generic_control);
 	nh.subscribe(sub_arm_control);
@@ -371,12 +370,12 @@ void checkClampAndStop() {
 			progress = 1;
 
 		uint32_t estimatedClampPos = estimated_clamp_pos.orig_pos + (uint32_t)(progress * (estimated_clamp_pos.target_pos - estimated_clamp_pos.orig_pos));
-		sprintf(strtmp, "SSS %lu | TTC %lu | ORG %lu | TRG %lu | PRG %lu | ECP %lu", milliseconds_since_start, estimated_clamp_pos.time_to_complete, estimated_clamp_pos.orig_pos, estimated_clamp_pos.target_pos, (uint32_t)(progress*100), estimatedClampPos); log_chars(strtmp);
+		//sprintf(strtmp, "SSS %lu | TTC %lu | ORG %lu | TRG %lu | PRG %lu | ECP %lu", milliseconds_since_start, estimated_clamp_pos.time_to_complete, estimated_clamp_pos.orig_pos, estimated_clamp_pos.target_pos, (uint32_t)(progress*100), estimatedClampPos); log_chars(strtmp);
 		armSetJointState(estimatedClampPos, 0, 0, 0, 0, 80); //80ms
 		estimated_clamp_pos.corrected = true; //prevent iteration for stopping clamp again
 	}
-	else
-		sprintf(strtmp, "SSS %lu | TTC %lu | ORG %lu | TRG %lu ", milliseconds_since_start, estimated_clamp_pos.time_to_complete, estimated_clamp_pos.orig_pos, estimated_clamp_pos.target_pos); log_chars(strtmp);
+	//else
+		//sprintf(strtmp, "SSS %lu | TTC %lu | ORG %lu | TRG %lu ", milliseconds_since_start, estimated_clamp_pos.time_to_complete, estimated_clamp_pos.orig_pos, estimated_clamp_pos.target_pos); log_chars(strtmp);
 }
 
 unsigned int menu_lag = 0;
@@ -457,6 +456,8 @@ void readData(unsigned char inByte){
       break;
     case 17: //data 3:1
       ranges[(Data_4deg_index << 2) + 3] = ((inByte & 0x3F) << 8) + ranges[(Data_4deg_index << 2) + 3];
+	if (Data_4deg_index == 89)
+		lidar_complete = true;
       break;
     case 18: //data 3:2 signal strength
     case 19: //data 3:3 signal strength
@@ -481,7 +482,7 @@ void decodeData(unsigned char inByte){
 				if (inByte==0xFA) {
 					Data_status=2;
 					Data_loop_index=1;
-				} 
+				}
 				else {// if not FA search again
 					Data_status=0;
 				}
@@ -512,91 +513,82 @@ void decodeData(unsigned char inByte){
 /*---------------------- LOOP() ---------------------*/
 void loop() {
 
-	//sent status message
-	if ( (millis()-range_timer50) > 50){   //[ms] 50ms == 20Hz
 
-		status_msg.header.stamp = nh.now();
+	status_msg.header.stamp = nh.now();
 
-		//bumper
-		status_msg.bumper_front = bumperFront;
-		bumperFrontPublished = true;
+	//bumper
+	status_msg.bumper_front = bumperFront;
+	bumperFrontPublished = true;
 
-		//menu controls
-		status_msg.menu_controls = menu_controls();
+	//menu controls
+	status_msg.menu_controls = menu_controls();
 
-		//odom
-		status_msg.odom_ticksLeft = motor_left_dir * odom_ticks_left;
-		status_msg.odom_ticksRight = motor_right_dir * odom_ticks_right;
-		odom_ticks_left = 0;
-		odom_ticks_right = 0;
-		unsigned long now = millis();
-		status_msg.odom_millisSinceLastUpdate = now - odomMillisSinceLastUpdate;
-		odomMillisSinceLastUpdate = now;
+	//odom
+	status_msg.odom_ticksLeft = motor_left_dir * odom_ticks_left;
+	status_msg.odom_ticksRight = motor_right_dir * odom_ticks_right;
+	odom_ticks_left = 0;
+	odom_ticks_right = 0;
+	unsigned long now = millis();
+	status_msg.odom_millisSinceLastUpdate = now - odomMillisSinceLastUpdate;
+	odomMillisSinceLastUpdate = now;
 
-		//wheels are expected to move but robot is stopped
-		velocity_control_LR();
-//add_status_code(req_motor_left);
-//add_status_code(old_motor_left);
-//add_status_code(odom_ticks_left_since_cmd);
-//add_status_code(millis_since_cmd);
+	//wheels are expected to move but robot is stopped
+	velocity_control_LR();
 
+	//sonar
+	status_msg.ultrasound_Back = ultrasoundBack;
 
-		//sonar
-		status_msg.ultrasound_Back = ultrasoundBack;
+	//arm
+	status_msg.arm_enabled = getArmPower();
+	status_msg.arm_yaw = servoSenseMedian_yaw.getMedian();
+	status_msg.arm_shoulder = servoSenseMedian_shoulder.getMedian();
+	status_msg.arm_elbow = servoSenseMedian_elbow.getMedian();
+	status_msg.arm_roll = servoSenseMedian_roll.getMedian();
+	status_msg.arm_clamp = servoSenseMedian_clamp.getMedian();
 
-		//arm
-		status_msg.arm_enabled = getArmPower();
-		status_msg.arm_yaw = servoSenseMedian_yaw.getMedian();
-		status_msg.arm_shoulder = servoSenseMedian_shoulder.getMedian();
-		status_msg.arm_elbow = servoSenseMedian_elbow.getMedian();
-		status_msg.arm_roll = servoSenseMedian_roll.getMedian();
-		status_msg.arm_clamp = servoSenseMedian_clamp.getMedian();
+	status_msg.arm_fore_clamp = digitalRead(PIN_ARM_FORE_CLAMP) == LOW ? true : false;
+	status_msg.arm_back_clamp = digitalRead(PIN_ARM_BACK_CLAMP) == LOW ? true : false;
+	if (estimated_clamp_pos.corrected == false && (status_msg.arm_fore_clamp == true || status_msg.arm_back_clamp == true))
+		checkClampAndStop();
 
-		status_msg.arm_fore_clamp = digitalRead(PIN_ARM_FORE_CLAMP) == LOW ? true : false;
-		status_msg.arm_back_clamp = digitalRead(PIN_ARM_BACK_CLAMP) == LOW ? true : false;
-		if (estimated_clamp_pos.corrected == false && (status_msg.arm_fore_clamp == true || status_msg.arm_back_clamp == true))
-			checkClampAndStop();
-
-		//motion detector
-		status_msg.motion_detector = motionDetector;
-		motionDetectorPublished = true;
+	//motion detector
+	status_msg.motion_detector = motionDetector;
+	motionDetectorPublished = true;
 
 
-		//parking photo sensor
-		status_msg.parkSens_inner = analogRead(PIN_PARK_SENS_INNER);
-		status_msg.parkSens_outer = analogRead(PIN_PARK_SENS_OUTER);
+	//parking photo sensor
+	status_msg.parkSens_inner = analogRead(PIN_PARK_SENS_INNER);
+	status_msg.parkSens_outer = analogRead(PIN_PARK_SENS_OUTER);
 
 
-		//IMU
-		status_msg.imu_sample_count = sampleCount;
-		status_msg.imu_gyro_bias_valid = imu->IMUGyroBiasValid();  //do not move IMU if false
+	//IMU
+	status_msg.imu_gyro_bias_valid = imu->IMUGyroBiasValid();  //do not move IMU if false
 
-		refreshMotorJoints();
+	refreshMotorJoints();
 
-		//Lidar
-		if (Serial3.available() > 0) {
-			decodeData(Serial3.read());
-		}
-		if (lidar_complete == true) {
-			for (int i = 0; i < 360; i++) {
-				if (ranges[i] > 5100) ranges[i] = 5100;  //max is 5meters anyway
-				status_msg.lidar_data[i] = (byte)(ranges[i] / 20);  //transfer 2cm steps to safe bandwidth
-			}
-			status_msg.lidar_speed = SpeedRPH; //needs to be divided by 64
-			lidar_complete = false;
-		}
-		
-		//publish
-		range_timer50 = millis();
-		pub_status.publish(&status_msg);
-		status_msg_clean();
-
-		//check arm power timeout to prevent overheat
-		if ( (getArmPower() == true) && ((arm_enabled_time + ARM_TIME_MAX_ENABLED) < millis()) ) {
-			setArmPower(false);
-		}
-		
+	//Lidar
+/*	if (Serial2.available()) {
+		decodeData(Serial2.read());
 	}
+*/	if (lidar_complete == true || true) {
+		for (int i = 0; i < 200; i++) {
+			if (ranges[i] > 5100) ranges[i] = 5100;  //max is 5meters anyway
+			status_msg.lidar_data[i] = (byte)(ranges[i] / 20);  //transfer 2cm steps to safe bandwidth
+		}
+		status_msg.lidar_data_length = 200;
+		status_msg.lidar_speed = SpeedRPH / 64;
+		lidar_complete = false;
+	}
+	
+	//publish
+	pub_status.publish(&status_msg);
+	status_msg_clean();
+
+	//check arm power timeout to prevent overheat
+	if ( (getArmPower() == true) && ((arm_enabled_time + ARM_TIME_MAX_ENABLED) < millis()) ) {
+		setArmPower(false);
+	}
+
 
 	//thigs to be done frequently
 	read_IMU();
@@ -642,42 +634,24 @@ void loop() {
 } //end of loop
 
 
-void clean_IMU() {
-	for (int i = 0; i < 3; i++) {
-		status_msg.imu_angular_velocity_v3_x[i] = 0;
-		status_msg.imu_angular_velocity_v3_y[i] = 0;
-		status_msg.imu_angular_velocity_v3_z[i] = 0;
-
-		status_msg.imu_linear_acceleration_v3_x[i] = 0;
-		status_msg.imu_linear_acceleration_v3_y[i] = 0;
-		status_msg.imu_linear_acceleration_v3_z[i] = 0;
-
-		status_msg.imu_compass_v3_x[i] = 0;
-		status_msg.imu_compass_v3_y[i] = 0;
-		status_msg.imu_compass_v3_z[i] = 0;
-	}
-	sampleCount = 0;
-}
 
 void read_IMU() {
 
-	if (sampleCount < 3 && imu->IMURead()) { // get the latest data if ready yet
+	if (imu->IMURead()) { // get the latest data if ready yet
 		RTVector3 gyro_v3 = (RTVector3&)imu->getGyro();
-		status_msg.imu_angular_velocity_v3_x[sampleCount] = gyro_v3.x();
-		status_msg.imu_angular_velocity_v3_y[sampleCount] = gyro_v3.y();
-		status_msg.imu_angular_velocity_v3_z[sampleCount] = gyro_v3.z();
+		status_msg.imu_angular_velocity_v3_x = gyro_v3.x();
+		status_msg.imu_angular_velocity_v3_y = gyro_v3.y();
+		status_msg.imu_angular_velocity_v3_z = gyro_v3.z();
 
 		RTVector3 accel_v3 = (RTVector3&)imu->getAccel();
-		status_msg.imu_linear_acceleration_v3_x[sampleCount] = accel_v3.x();
-		status_msg.imu_linear_acceleration_v3_y[sampleCount] = accel_v3.y();
-		status_msg.imu_linear_acceleration_v3_z[sampleCount] = accel_v3.z();
+		status_msg.imu_linear_acceleration_v3_x = accel_v3.x();
+		status_msg.imu_linear_acceleration_v3_y = accel_v3.y();
+		status_msg.imu_linear_acceleration_v3_z = accel_v3.z();
 
 		RTVector3 compass_v3 = (RTVector3&)imu->getCompass();
-		status_msg.imu_compass_v3_x[sampleCount] = compass_v3.x();
-		status_msg.imu_compass_v3_y[sampleCount] = compass_v3.y();
-		status_msg.imu_compass_v3_z[sampleCount] = compass_v3.z();
-
-		sampleCount++;
+		status_msg.imu_compass_v3_x = compass_v3.x();
+		status_msg.imu_compass_v3_y = compass_v3.y();
+		status_msg.imu_compass_v3_z = compass_v3.z();
 	}
 
 }
@@ -871,11 +845,9 @@ uint32_t check_limits(uint32_t val, uint32_t min, uint32_t max) {
 
     if (val < min) {
 	val = min;
-	log_string("ArmSrvoMinX:" + String(min, DEC));  //nevim jestli funguje
     }
     if (val > max) {
 	val = max;
-	log_string("ArmSrvoMaxX:" + String(max, DEC));
     }
 
     return val;
@@ -891,7 +863,7 @@ Postup ladeni
 void setMotorJoint(int pin0, int pin1, int pinsense, int target_ohm) {
 
 	int current_ohm = analogRead(pinsense);
-	add_status_code(current_ohm);
+	//add_status_code(current_ohm);
 
 	int a0 = LOW;  //stop implicitly
 	int a1 = LOW;
@@ -969,7 +941,7 @@ void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow, uint32_t sh
 	}
 
 	String cmd = String(arm_clamp + arm_roll + arm_elbow + arm_shoulder + arm_yaw + "T" + time_to_complete_str + "\r\n");
-	log_string(cmd);
+	//log_string(cmd);
 	Serial3.print(cmd);
 
 }
@@ -1043,8 +1015,8 @@ void velocity_control_LR() {
 	//include correction <0 - ow; MOTOR_MAX + ow> where ow is an overflow
 	int corrected_motor_left  = motor_vel_to_pwm(abs(req_motor_left))  + constrain(correction_motor_left  * 5, -MOTOR_MAX/5, MOTOR_MAX/5);
 	int corrected_motor_right = motor_vel_to_pwm(abs(req_motor_right)) + constrain(correction_motor_right * 5, -MOTOR_MAX/5, MOTOR_MAX/5);
-	add_status_code(corrected_motor_left);
-	add_status_code(corrected_motor_right);
+	//add_status_code(corrected_motor_left);
+	//add_status_code(corrected_motor_right);
 
 	//remap if speed of any wheel overflows 0 or MOTOR_MAX
 	if (corrected_motor_left < MOTOR_MIN)
@@ -1080,8 +1052,8 @@ void velocity_control_LR() {
 	digitalWrite(PIN_MOTOR_LEFT_0, a0);
 	digitalWrite(PIN_MOTOR_LEFT_1, a1);
 	analogWrite(PIN_MOTOR_LEFT_ENA, constrain(corrected_motor_left, 0, MOTOR_MAX));
-	add_status_code(correction_motor_left);
-	add_status_code(corrected_motor_left);
+	//add_status_code(correction_motor_left);
+	//add_status_code(corrected_motor_left);
 
 	//right
 	a0 = LOW;
@@ -1097,8 +1069,8 @@ void velocity_control_LR() {
 	digitalWrite(PIN_MOTOR_RIGHT_0, a0);
 	digitalWrite(PIN_MOTOR_RIGHT_1, a1);
 	analogWrite(PIN_MOTOR_RIGHT_ENA, constrain(corrected_motor_right, 0, MOTOR_MAX));
-	add_status_code(correction_motor_right);
-	add_status_code(corrected_motor_right);
+	//add_status_code(correction_motor_right);
+	//add_status_code(corrected_motor_right);
 }
 
 //odometry encoders
