@@ -27,7 +27,6 @@ Black    GND
 */
 
 
-#include <NewPing.h>
 #include <Servo.h>
 #include <RunningMedian.h>
 #include <Wire.h>
@@ -44,7 +43,6 @@ Black    GND
 #include "robik.h"
 #include "robot_config.h"
 #include "robik_api.h"
-//#include "Arduino.h"
 
 
 ros::NodeHandle nh;
@@ -71,11 +69,6 @@ double old_motor_right = 0;
 long odom_ticks_left_since_cmd = 0;
 long odom_ticks_right_since_cmd = 0;
 unsigned long millis_since_cmd = 0;
-
-//sonar.h
-unsigned long pingTimer;
-NewPing sonar(PIN_USOUND_TRIG, PIN_USOUND_ECHO, MAX_DISTANCE);
-void echoCheck();
 
 //IMU
 RTIMU *imu;                                           // the IMU object
@@ -292,9 +285,6 @@ void setup() {
 
 	range_timer50 = 11;
 
-	//sonar
-	pingTimer = millis();
-
 	//odometry encoders
 	pinMode(PIN_ODOM_LEFT, INPUT);
 	digitalWrite(PIN_ODOM_LEFT, HIGH);       // turn on pullup resistor
@@ -302,10 +292,6 @@ void setup() {
 	digitalWrite(PIN_ODOM_RIGHT, HIGH);       // turn on pullup resistor
 	attachInterrupt(INT_ODOM_LEFT, intr_left_encoder, CHANGE);
 	attachInterrupt(INT_ODOM_RIGHT, intr_right_encoder, CHANGE);
-
-	//bumber
-	pinMode(PIN_BUMPER, INPUT);
-	digitalWrite(PIN_BUMPER, HIGH); // turn on pullup resistors
 
 	//motion detector
 	pinMode(PIN_MOTION_DETECTOR, INPUT);
@@ -516,10 +502,6 @@ void loop() {
 
 	status_msg.header.stamp = nh.now();
 
-	//bumper
-	status_msg.bumper_front = bumperFront;
-	bumperFrontPublished = true;
-
 	//menu controls
 	status_msg.menu_controls = menu_controls();
 
@@ -534,9 +516,6 @@ void loop() {
 
 	//wheels are expected to move but robot is stopped
 	velocity_control_LR();
-
-	//sonar
-	status_msg.ultrasound_Back = ultrasoundBack;
 
 	//arm
 	status_msg.arm_enabled = getArmPower();
@@ -596,21 +575,6 @@ void loop() {
 	jetsonPower();
 	
 	nh.spinOnce();
-
-	//sonar
-	if (millis() >= pingTimer) {         // Is it this sensor's time to ping?
-		pingTimer += PING_INTERVAL;
-		sonar.ping_timer(echoCheck); // Do the ping (processing continues, interrupt will call echoCheck to look for echo).
-	}
-
-	//bumper
-	if (digitalRead(PIN_BUMPER) == LOW) {
-		bumperFrontPublished = false;
-		bumperFront = true;
-	}
-	else {
-		if (bumperFrontPublished == true) bumperFront = false;
-	}
 
 	//motion detector
 	if (digitalRead(PIN_MOTION_DETECTOR) == HIGH) {

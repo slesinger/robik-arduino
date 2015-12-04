@@ -2,9 +2,6 @@
 #define ROBOT_CONFIG
 //===============
 
-/* Bumper */
-#define PIN_BUMPER 39
-
 /* Menu controls */
 #define PIN_MENU_MENU 49
 #define PIN_MENU_OK 51
@@ -33,13 +30,6 @@
 #define MAX_VEL 0.4 // m/s
 #define MAX_TH 2.4  //RAD/s - if one wheel is stopeed and other works full speed
 #define MIN_TH 0
-
-/* Sonar */
-#define PIN_USOUND_ECHO 42
-#define PIN_USOUND_TRIG 43
-#define SONAR_NUM     1  // Number of sensors.
-#define MAX_DISTANCE 200 // Maximum distance (in cm) to ping.
-#define PING_INTERVAL 33 // Milliseconds between sensor pings (29ms is about the min to avoid cross-sensor echo).
 
 /* Parking Light Sensor */
 #define PIN_PARK_SENS_INNER A6
