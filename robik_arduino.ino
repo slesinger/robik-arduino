@@ -49,15 +49,6 @@ RTIMU *imu;                                           // the IMU object
 RTIMUSettings settings;                               // the settings object
 void read_IMU();
 
-//Lidar
-unsigned int ranges[360];
-boolean lidar_complete;
-unsigned char Data_status=0;
-unsigned char Data_4deg_index=0;
-unsigned char Data_loop_index=0;
-unsigned char SpeedRPHhighbyte=0;
-unsigned char SpeedRPHLowbyte=0;
-int SpeedRPH=0;
 
 //DISPLAY_INTERVAL sets the rate at which results are displayed
 #define DISPLAY_INTERVAL  300                         // interval between pose displays
@@ -121,7 +112,6 @@ void init_variables() {
 	estimated_clamp_pos.corrected = false;
 
 	status_msg.status_code = (int32_t *) malloc(20 * sizeof(int32_t));
-	status_msg.lidar_data = (byte *) malloc(360 * sizeof(byte));
 	
 }
 
@@ -157,7 +147,6 @@ void status_msg_clean () {
 	charBuf[0] = '\0';
 	status_msg.log_count = 0;
 	status_msg.status_code_length = 0;
-	status_msg.lidar_data_length = 0;
 	status_msg.status_param_length = 0;
 }
 
@@ -191,7 +180,7 @@ void setup() {
 	init_variables();
 
 	//Arm
-	setup_arm();
+	setup_arm(&nh);
 
 	//LED
 	pinMode(PIN_LED, OUTPUT);
@@ -207,11 +196,6 @@ void setup() {
 	}
 
 	imu->getCalibrationValid();
-
-	//Lidar
-	lidar_complete = false;
-	Serial2.begin(115200);  // XV-11 LDS data 
-
 
 	//ROS node
 	nh.getHardware()->setBaud(500000); //57600 115200 500000
@@ -262,31 +246,6 @@ void setup() {
 
 }
 
-//Return time difference in milliseconds
-uint32_t ros_time_diff(ros::Time before, ros::Time after) {
-	uint32_t sec = after.sec - before.sec;
-	uint32_t nsec = after.nsec - before.nsec;
-
-	if (nsec < 0) {
-		nsec = 1000 + nsec;
-	}
-
-	return sec * 1000 + nsec / 1000000;
-}
-
-//-1: t2<t1
-// 0: t2==t1
-// 1: t2>t1
-int ros_time_cmp(ros::Time t1, ros::Time t2) {
-	if (t1.sec == t2.sec && t1.nsec == t2.nsec)
-		return 0;
-
-	if (ros_time_diff(t1, t2) > 0)
-		return 1;
-	else
-		return -1;
-}
-
 
 unsigned int menu_lag = 0;
 uint8_t menu_controls(){
@@ -311,114 +270,6 @@ uint8_t menu_controls(){
   return res;
 }
 
-//lidar
-//read one byte from packet, there is 90 packets á 22 bytes
-//readng starts after $FA
-//data_loop_index == 1 means it is pointing to index
-//<start> <index> <speed_L> <speed_H> [Data 0] [Data 1] [Data 2] [Data 3] <checksum_L> <checksum_H>
-void readData(unsigned char inByte){
-  switch (Data_loop_index){
-    case 1: // 4 degree index
-      Data_4deg_index=inByte-0xA0;
-      break;
-      
-    case 2: // Speed in RPH low byte
-      SpeedRPHLowbyte=inByte;
-      break;
-      
-    case 3: // Speed in RPH high byte
-      SpeedRPHhighbyte=inByte;
-      SpeedRPH=(SpeedRPHhighbyte<<8)|SpeedRPHLowbyte;
-      break;
-      
-    case 4: //data 0:0
-      ranges[(Data_4deg_index << 2) + 0] = inByte;
-      break;
-    case 5: //data 0:1
-      ranges[(Data_4deg_index << 2) + 0] = ((inByte & 0x3F) << 8) + ranges[(Data_4deg_index << 2) + 0];
-      break;
-    case 6: //data 0:2 signal strength
-    case 7: //data 0:3 signal strength
-      break;
-            
-    case 8: //data 1:0
-      ranges[(Data_4deg_index << 2) + 1] = inByte;
-      break;
-    case 9: //data 1:1
-      ranges[(Data_4deg_index << 2) + 1] = ((inByte & 0x3F) << 8) + ranges[(Data_4deg_index << 2) + 1];
-      break;
-    case 10: //data 1:2 signal strength
-    case 11: //data 1:3 signal strength
-      break;
-            
-    case 12: //data 2:0
-      ranges[(Data_4deg_index << 2) + 2] = inByte;
-      break;
-    case 13: //data 2:1
-      ranges[(Data_4deg_index << 2) + 2] = ((inByte & 0x3F) << 8) + ranges[(Data_4deg_index << 2) + 2];
-      break;
-    case 14: //data 2:2 signal strength
-    case 15: //data 2:3 signal strength
-      break;
-            
-    case 16: //data 3:0
-      ranges[(Data_4deg_index << 2) + 3] = inByte;
-      break;
-    case 17: //data 3:1
-      ranges[(Data_4deg_index << 2) + 3] = ((inByte & 0x3F) << 8) + ranges[(Data_4deg_index << 2) + 3];
-	if (Data_4deg_index == 89)
-		lidar_complete = true;
-      break;
-    case 18: //data 3:2 signal strength
-    case 19: //data 3:3 signal strength
-      break;
-            
-    default: //TODO do checksum
-        break;
-  }
-}
-
-//lidar
-void decodeData(unsigned char inByte){
-	switch (Data_status){
-		case 0: // no header
-			if (inByte==0xFA) {
-				Data_status=1;
-				Data_loop_index=1;
-			}
-			break;
-		case 1: // Find 2nd FA
-			if (Data_loop_index==22) {
-				if (inByte==0xFA) {
-					Data_status=2;
-					Data_loop_index=1;
-				}
-				else {// if not FA search again
-					Data_status=0;
-				}
-			}
-			else {
-				Data_loop_index++;
-			}
-			break;
-
-		case 2: // Read data out
-			if (Data_loop_index==22) {
-				if (inByte==0xFA) {
-					Data_loop_index=1;
-				} 
-				else {// if not FA search again
-					Data_status=0;
-				}
-			}
-			else {
-				readData(inByte);
-				Data_loop_index++;
-			}
-			break;
-	} //end of switch
-} //end of decodeData
-
 
 /*---------------------- LOOP() ---------------------*/
 void loop() {
@@ -442,7 +293,7 @@ void loop() {
 	velocity_control_LR();
 
 	//arm
-	loop_arm();
+	loop_arm(status_msg);
 
 	//motion detector
 	status_msg.motion_detector = motionDetector;
@@ -459,20 +310,6 @@ void loop() {
 
 	refreshMotorJoints();
 
-	//Lidar
-/*	if (Serial2.available()) {
-		decodeData(Serial2.read());
-	}
-*/	if (lidar_complete == true || true) {
-		for (int i = 0; i < 200; i++) {
-			if (ranges[i] > 5100) ranges[i] = 5100;  //max is 5meters anyway
-			status_msg.lidar_data[i] = (byte)(ranges[i] / 20);  //transfer 2cm steps to safe bandwidth
-		}
-		status_msg.lidar_data_length = 200;
-		status_msg.lidar_speed = SpeedRPH / 64;
-		lidar_complete = false;
-	}
-	
 	//publish
 	pub_status.publish(&status_msg);
 	status_msg_clean();
@@ -613,12 +450,6 @@ void handle_parking() {
 
 /*------------------------ Listeners -------------------*/
 
-void echoCheck() { // If ping received, set the sensor distance to array.
-
-	 if (sonar.check_timer())
-		 ultrasoundBack = sonar.ping_result / US_ROUNDTRIP_CM;
-}
-
 void genop_head_pose(const robik::GenericControl& msg) {
 
 	//head
@@ -662,24 +493,6 @@ void genericMessageListener(const robik::GenericControl& msg) {
 
 }
 
-//replace by constrain arduino funtion after logging will no longer be needed
-uint32_t check_limits(uint32_t val, uint32_t min, uint32_t max) {
-
-    if (min > max) {
-	uint32_t t = min;
-	min = max;
-	max = t;
-    }
-
-    if (val < min) {
-	val = min;
-    }
-    if (val > max) {
-	val = max;
-    }
-
-    return val;
-}
 /*
 Postup ladeni
 - zapoj potenciometr serva do analogu a zapis min a max hodnotu
