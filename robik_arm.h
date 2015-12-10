@@ -245,10 +245,5 @@ void loop_arm(robik::GenericStatus& status_msg) {
 
 }
 
-void loop_frequent_arm() {
-}
-
-
-
 
 #endif /* ROBIK_ARM_H_ */
