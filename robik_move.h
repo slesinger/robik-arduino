@@ -20,7 +20,48 @@ double old_motor_left = 0; //store to compare if speed changed since last cmd_ve
 double old_motor_right = 0;
 long odom_ticks_left_since_cmd = 0;
 long odom_ticks_right_since_cmd = 0;
+int odom_ticks_left = 0;
+int odom_ticks_right = 0;
 unsigned long millis_since_cmd = 0;
+
+void intr_left_encoder();
+void intr_right_encoder();
+int motor_vel_to_pwm(double vel);
+
+
+void setup_move() {
+	//odometry encoders
+	pinMode(PIN_ODOM_LEFT, INPUT);
+	digitalWrite(PIN_ODOM_LEFT, HIGH);       // turn on pullup resistor
+	pinMode(PIN_ODOM_RIGHT, INPUT);
+	digitalWrite(PIN_ODOM_RIGHT, HIGH);       // turn on pullup resistor
+	attachInterrupt(INT_ODOM_LEFT, intr_left_encoder, CHANGE);
+	attachInterrupt(INT_ODOM_RIGHT, intr_right_encoder, CHANGE);
+
+	//velocity
+	pinMode(PIN_MOTOR_LEFT_ENA, OUTPUT); //Motor left
+	pinMode(PIN_MOTOR_LEFT_0, OUTPUT);
+	pinMode(PIN_MOTOR_LEFT_1, OUTPUT);
+	pinMode(PIN_MOTOR_RIGHT_ENA, OUTPUT); //Motor right
+	pinMode(PIN_MOTOR_RIGHT_0, OUTPUT);
+	pinMode(PIN_MOTOR_RIGHT_1, OUTPUT);
+
+
+}
+
+void loop_move(robik::GenericStatus& status_msg) {
+	//odom
+	status_msg.odom_ticksLeft = motor_left_dir * odom_ticks_left;
+	status_msg.odom_ticksRight = motor_right_dir * odom_ticks_right;
+	odom_ticks_left = 0;
+	odom_ticks_right = 0;
+
+	//wheels are expected to move but robot is stopped
+	velocity_control_LR();
+
+}
+
+
 
 // vel: linear velocity [m/sec]
 // theta: angular velocity [rad/sec]
@@ -143,5 +184,24 @@ void velocity_control_LR() {
 	//add_status_code(corrected_motor_right);
 }
 
+//Input received from diff_drive_controller
+void velocityMessageListener(const robik::VelocityControl& msg) {
+	req_motor_left = constrain(msg.motor_left, -MAX_VEL, MAX_VEL);
+	req_motor_right = constrain(msg.motor_right, -MAX_VEL, MAX_VEL);
+	velocity_control_LR();
+}
+
+//odometry encoders
+void intr_left_encoder() {
+
+	odom_ticks_left++;
+	odom_ticks_left_since_cmd++;
+}
+
+void intr_right_encoder() {
+
+	odom_ticks_right++;
+	odom_ticks_right_since_cmd++;
+}
 
 #endif /* ROBIK_MOVE_H_ */

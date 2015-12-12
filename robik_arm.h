@@ -203,6 +203,14 @@ void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow, uint32_t sh
 
 
 void setup_arm(ros::NodeHandle *nh) {
+
+	estimated_clamp_pos.orig_time.sec = 0;
+	estimated_clamp_pos.orig_time.nsec = 0;
+	estimated_clamp_pos.time_to_complete = 0;
+	estimated_clamp_pos.orig_pos = 0;
+	estimated_clamp_pos.target_pos = 0;
+	estimated_clamp_pos.corrected = false;
+
         _nh = nh;
 	Serial3.begin(9600);
 	delay(100);
@@ -245,5 +253,33 @@ void loop_arm(robik::GenericStatus& status_msg) {
 
 }
 
+/*
+Postup ladeni
+- zapoj potenciometr serva do analogu a zapis min a max hodnotu
+- odladit smer otaceni, pak odstranit 100ms stop  //konfiguruj PWM stejne jako ohm
+- vyzkouset jestli shoulder2 se hybe stejne jako shoulder1
+*/
+
+//TODO pridej parametr effort
+void setMotorJoint(int pin0, int pin1, int pinsense, int target_ohm) {
+
+	int current_ohm = analogRead(pinsense);
+	//add_status_code(current_ohm);
+
+	int a0 = LOW;  //stop implicitly
+	int a1 = LOW;
+	if (current_ohm > target_ohm) {
+		a0 = HIGH;
+	}
+	else if (current_ohm < target_ohm) {
+		a1 = HIGH;
+	}
+	/*digitalWrite(pin0, a0);*/
+	/*digitalWrite(pin1, a1);*/
+
+	//delay(100);   //zastav motor pro 100ms dokud neodladis smer
+	/*digitalWrite(pin0, LOW);*/
+	/*digitalWrite(pin1, LOW);*/
+}
 
 #endif /* ROBIK_ARM_H_ */
