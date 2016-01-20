@@ -2,12 +2,11 @@
 #define ROBOT_CONFIG
 //===============
 
-/* Menu controls */
-#define PIN_MENU_MENU 49
-#define PIN_MENU_OK 51
-#define PIN_MENU_CANCEL 50
-#define PIN_MENU_UP 53
-#define PIN_MENU_DOWN 52
+/* Lidar */
+#define PIN_LIDAR_PWM 9
+#define LIDAR_INIT_PWM 20  //needs to be estimated so that lidar starts spinning in range 60-320rpm
+#define LIDAR_TARGET_RPM 300
+
 
 /* Motors */
 #define PIN_MOTOR_LEFT_ENA 2
@@ -31,17 +30,9 @@
 #define MAX_TH 2.4  //RAD/s - if one wheel is stopeed and other works full speed
 #define MIN_TH 0
 
-/* Parking Light Sensor */
-#define PIN_PARK_SENS_INNER A6
-#define PIN_PARK_SENS_OUTER A7
-
 /* Head */
 #define PIN_MOTION_DETECTOR 38
 #define PIN_LED 40
-
-/* Oko */
-#define PIN_OKO_SERVO_YAW 8
-#define PIN_OKO_SERVO_PITCH 9
 
 /* Odometry encoder */
 #define PIN_ODOM_LEFT 18

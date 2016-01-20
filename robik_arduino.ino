@@ -15,6 +15,7 @@
 #include "robik/GenericControl.h"
 #include "robik/ArmControl.h"
 #include "robik/VelocityControl.h"
+#include "std_msgs/UInt16.h"
 #include "robik.h"
 #include "robik_util.h"
 #include "robik_arm.h"
@@ -31,6 +32,7 @@ void genericMessageListener(const robik::GenericControl& msg);
 void velocityMessageListener(const robik::VelocityControl& msg);
 ros::Subscriber<robik::GenericControl> sub_generic_control("robik_generic_control", &genericMessageListener);
 ros::Subscriber<robik::VelocityControl> sub_velocity_control("robik_velocity_control", &velocityMessageListener);
+ros::Subscriber<std_msgs::UInt16> sub_lidarrpm_control("rpms", &lidarrpmMessageListener);
 void setArmPower(bool status);
 bool getArmPower();
 
@@ -41,6 +43,7 @@ unsigned long odomMillisSinceLastUpdate = 0;
 bool powerJetsonWasPoweredOn = false;
 bool motionDetector = false;
 bool motionDetectorPublished = true;
+int lidar_curr_pwm = 0;
 
 
 void status_msg_clean () {
@@ -76,6 +79,10 @@ void setup() {
 	//Light
 	pinMode(PIN_LED, OUTPUT);
 	digitalWrite(PIN_LED, LOW);
+	
+	//Lidar
+	pinMode(PIN_LIDAR_PWM, OUTPUT);
+	lidarrpmMessageListener(0);
 
 	//IMU
 	setup_imu();
@@ -189,5 +196,24 @@ void genericMessageListener(const robik::GenericControl& msg) {
 	}
 
 }
+
+void lidarrpmMessageListener(const std_msgs::UInt16 rpm) {
+	int pwm_diff = 0;
+	
+	if ( (rpm >= 60) && (rpm <=350) ) {
+			int rpm_diff = LIDAR_TARGET_RPM - rpm;
+			rpm_diff = constrain(rpm_diff, -50, 50);
+			pwm_diff = map(rpm_diff,  -50, 50,  -5, 5);
+			lidar_curr_pwm += pwm_diff;
+	}
+	else { // else we do not have rpm value or we do not trust the value
+			lidar_curr_pwm = LIDAR_INIT_PWM; 
+	}
+	
+lidar_curr_pwm = LIDAR_INIT_PWM; //pro ucely prvotniho nastaveni na zhruba 200rpm, pak smazat
+	analogWrite(PIN_LIDAR_PWM, lidar_curr_pwm);
+}
+
+
 
 
