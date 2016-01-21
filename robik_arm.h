@@ -99,6 +99,7 @@ void setArmPower(bool state) {
 		}
 	}
 	else {
+		digitalWrite(PIN_RELAY, HIGH);
 		digitalWrite(PIN_RELAY, LOW);
 		arm_enabled_time = 0;
 		arm_disabled_time = millis();

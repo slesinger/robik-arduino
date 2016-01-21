@@ -21,7 +21,7 @@
 #include "robik_arm.h"
 #include "robik_move.h"
 #include "robik_imu.h"
-#include "robik_park.h"
+//#include "robik_park.h"
 #include "robot_config.h"
 #include "robik_api.h"
 
@@ -30,6 +30,7 @@ ros::NodeHandle nh;
 
 void genericMessageListener(const robik::GenericControl& msg);
 void velocityMessageListener(const robik::VelocityControl& msg);
+void lidarrpmMessageListener(const std_msgs::UInt16& msg);
 ros::Subscriber<robik::GenericControl> sub_generic_control("robik_generic_control", &genericMessageListener);
 ros::Subscriber<robik::VelocityControl> sub_velocity_control("robik_velocity_control", &velocityMessageListener);
 ros::Subscriber<std_msgs::UInt16> sub_lidarrpm_control("rpms", &lidarrpmMessageListener);
@@ -44,7 +45,9 @@ bool powerJetsonWasPoweredOn = false;
 bool motionDetector = false;
 bool motionDetectorPublished = true;
 int lidar_curr_pwm = 0;
-
+int lidar_curr_pwmd = 99;
+int lidar_curr_pwmr = 98;
+unsigned long last_lidar_update = 0;
 
 void status_msg_clean () {
 	charBuf[0] = '\0';
@@ -82,7 +85,10 @@ void setup() {
 	
 	//Lidar
 	pinMode(PIN_LIDAR_PWM, OUTPUT);
-	lidarrpmMessageListener(0);
+	std_msgs::UInt16 nula;// = new std_msgs::UInt16();
+	nula.data = 0;
+	lidar_curr_pwm = LIDAR_INIT_PWM;
+	lidarrpmMessageListener(nula);
 
 	//IMU
 	setup_imu();
@@ -93,6 +99,7 @@ void setup() {
 	nh.subscribe(sub_generic_control);
 	nh.subscribe(sub_arm_control);
 	nh.subscribe(sub_velocity_control);
+	nh.subscribe(sub_lidarrpm_control);
 	nh.advertise(pub_status);
 
 	while(!nh.connected()) {
@@ -127,6 +134,11 @@ void loop() {
 	//arm
 	loop_arm(status_msg);
 
+	//lidar
+      	if ( (last_lidar_update + LIDAR_POWEROFF_TIMEOUT) < millis() ) {
+	//analogWrite(PIN_LIDAR_PWM, 0);
+	}
+
 	//motion detector
 	status_msg.motion_detector = motionDetector;
 	motionDetectorPublished = true;
@@ -141,18 +153,20 @@ void loop() {
 	}
 
 	//Parking
-	loop_park(status_msg);
+	//loop_park(status_msg);
 
 	//IMU
 	loop_imu(status_msg);
 
 	//thigs to be done frequently
 	jetsonPower();
-	
+	add_status_code(lidar_curr_pwm);
+	add_status_code(lidar_curr_pwmd);
+	add_status_code(lidar_curr_pwmr);
 	//publish
 	pub_status.publish(&status_msg);
-	status_msg_clean();
 	nh.spinOnce();
+	status_msg_clean();
 
 } //end of loop
 
@@ -183,7 +197,7 @@ void genericMessageListener(const robik::GenericControl& msg) {
 		genop_head_pose(msg);
 	}
 	if (msg.gen_operation == OPERATION_SET_PARKING_PHASE) {
-		setParkingPhase(msg);
+	  //setParkingPhase(msg);
 	}
 	if (msg.gen_operation == OPERATION_SET_LED) {
 		setLED(msg);
@@ -197,21 +211,23 @@ void genericMessageListener(const robik::GenericControl& msg) {
 
 }
 
-void lidarrpmMessageListener(const std_msgs::UInt16 rpm) {
-	int pwm_diff = 0;
+void lidarrpmMessageListener(const std_msgs::UInt16& msg) {
+  int pwm_diff = 0;
+  uint16_t i_rpm = msg.data;
+lidar_curr_pwmr = i_rpm;
+  last_lidar_update = millis();
+  if ( (i_rpm >= 60) && (i_rpm <=350) ) {
+    int rpm_diff = LIDAR_TARGET_RPM - i_rpm;
+    rpm_diff = constrain(rpm_diff, -50, 50);
+    pwm_diff = map(rpm_diff,  -50, 50,  -5, 5);
+    lidar_curr_pwm += pwm_diff;
+lidar_curr_pwmd = pwm_diff;
+  }
+  else { // else we do not have rpm value or we do not trust the value
+    lidar_curr_pwm = LIDAR_INIT_PWM; 
+  }
 	
-	if ( (rpm >= 60) && (rpm <=350) ) {
-			int rpm_diff = LIDAR_TARGET_RPM - rpm;
-			rpm_diff = constrain(rpm_diff, -50, 50);
-			pwm_diff = map(rpm_diff,  -50, 50,  -5, 5);
-			lidar_curr_pwm += pwm_diff;
-	}
-	else { // else we do not have rpm value or we do not trust the value
-			lidar_curr_pwm = LIDAR_INIT_PWM; 
-	}
-	
-lidar_curr_pwm = LIDAR_INIT_PWM; //pro ucely prvotniho nastaveni na zhruba 200rpm, pak smazat
-	analogWrite(PIN_LIDAR_PWM, lidar_curr_pwm);
+  analogWrite(PIN_LIDAR_PWM, lidar_curr_pwm);
 }
 
 

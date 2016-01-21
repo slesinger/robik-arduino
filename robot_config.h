@@ -4,8 +4,9 @@
 
 /* Lidar */
 #define PIN_LIDAR_PWM 9
-#define LIDAR_INIT_PWM 20  //needs to be estimated so that lidar starts spinning in range 60-320rpm
+#define LIDAR_INIT_PWM 130  //needs to be estimated so that lidar starts spinning in range 60-320rpm
 #define LIDAR_TARGET_RPM 300
+#define LIDAR_POWEROFF_TIMEOUT 10000 //[ms]
 
 
 /* Motors */
