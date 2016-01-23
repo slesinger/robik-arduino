@@ -136,7 +136,7 @@ void loop() {
 
 	//lidar
       	if ( (last_lidar_update + LIDAR_POWEROFF_TIMEOUT) < millis() ) {
-	//analogWrite(PIN_LIDAR_PWM, 0);
+	  analogWrite(PIN_LIDAR_PWM, 0);
 	}
 
 	//motion detector

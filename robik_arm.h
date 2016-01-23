@@ -126,12 +126,12 @@ uint32_t check_limits(uint32_t val, uint32_t min, uint32_t max) {
 }
 
 void armPreInit() {
-	Serial3.print("#10P1320T500\r\n"); delay(500);
+	Serial3.print("#10P1610T500\r\n"); delay(500);
 	Serial3.print("#3P2250T500\r\n"); delay(500);
 	Serial3.print("#4P1740T500\r\n"); delay(500);
 	Serial3.print("#5P1091T500\r\n"); delay(500);
 	Serial3.print("#1P1908T500\r\n"); delay(500);
-	Serial3.print("#10P1280T500\r\n"); delay(500);
+	Serial3.print("#10P1730T500\r\n"); delay(500);
 
 	Serial3.print("#11P700T1\r\n");  //set initial speed for shoulder 2
 	shoulder2 = 512; //set initial position for shoulder2
