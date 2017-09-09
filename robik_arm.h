@@ -16,27 +16,19 @@
 ros::NodeHandle *_nh;
 
 void armMessageListener(const robik::ArmControl& msg);
-ros::Subscriber<robik::ArmControl> sub_arm_control("robik_arm_control",
-		&armMessageListener);
+ros::Subscriber<robik::ArmControl> sub_arm_control("robik_arm_control", &armMessageListener);
 
 void armPreInit();
-void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow,
-		uint32_t shoulder, uint32_t yaw, uint32_t time_to_complete);
+void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow, uint32_t shoulder, uint32_t yaw, uint32_t time_to_complete);
 unsigned long servoSenseTimer;
-uint32_t shoulder2 = 512;
-estimated_pos_t estimated_clamp_pos;
 void refreshMotorJoints();
-unsigned long arm_enabled_time = 0;
-unsigned long arm_disabled_time = 1;
+unsigned long arm_enabled_time = 0;  //od kdy je zapnuty
+unsigned long arm_disabled_time = 1; //od kdy je vypnuty
 uint32_t old_clamp = 0;
 uint32_t old_roll = 0;
 uint32_t old_elbow = 0;
 uint32_t old_shoulder = 0;
 uint32_t old_yaw = 0;
-
-bool getArmPower() {
-	return (arm_enabled_time != 0) ? true : false;
-}
 
 //Return time difference in milliseconds
 uint32_t ros_time_diff(ros::Time before, ros::Time after) {
@@ -50,63 +42,26 @@ uint32_t ros_time_diff(ros::Time before, ros::Time after) {
 	return sec * 1000 + nsec / 1000000;
 }
 
-//-1: t2<t1
-// 0: t2==t1
-// 1: t2>t1
-int ros_time_cmp(ros::Time t1, ros::Time t2) {
-	if (t1.sec == t2.sec && t1.nsec == t2.nsec)
-		return 0;
-
-	if (ros_time_diff(t1, t2) > 0)
-		return 1;
-	else
-		return -1;
-}
-
-void checkClampAndStop() {
-//time_to_complete [ms]
-	ros::Time now = _nh->now();
-	uint32_t milliseconds_since_start = ros_time_diff(estimated_clamp_pos.orig_time, now);
-
-	if ((estimated_clamp_pos.orig_pos < estimated_clamp_pos.target_pos)
-			&& (milliseconds_since_start
-					< (estimated_clamp_pos.time_to_complete + 700))) { //clamp is being moved, try hard for extra 700
-		double progress = milliseconds_since_start
-				/ estimated_clamp_pos.time_to_complete;
-		progress *= 0.9; //bring it back a bit to compensate late detection
-		if (progress > 1)
-			progress = 1;
-
-		uint32_t estimatedClampPos = estimated_clamp_pos.orig_pos
-				+ (uint32_t)(
-						progress
-								* (estimated_clamp_pos.target_pos
-										- estimated_clamp_pos.orig_pos));
-		//sprintf(strtmp, "SSS %lu | TTC %lu | ORG %lu | TRG %lu | PRG %lu | ECP %lu", milliseconds_since_start, estimated_clamp_pos.time_to_complete, estimated_clamp_pos.orig_pos, estimated_clamp_pos.target_pos, (uint32_t)(progress*100), estimatedClampPos); log_chars(strtmp);
-		armSetJointState(estimatedClampPos, 0, 0, 0, 0, 80); //80ms
-		estimated_clamp_pos.corrected = true; //prevent iteration for stopping clamp again
-	}
-	//else
-	//sprintf(strtmp, "SSS %lu | TTC %lu | ORG %lu | TRG %lu ", milliseconds_since_start, estimated_clamp_pos.time_to_complete, estimated_clamp_pos.orig_pos, estimated_clamp_pos.target_pos); log_chars(strtmp);
+bool getArmPower() {
+	return (arm_enabled_time != 0) ? true : false;
 }
 
 void setArmPower(bool state) {
-	if (state) {
-		if (arm_disabled_time + ARM_TIME_MIN_BREAK < millis()) {
-			digitalWrite(PIN_RELAY, HIGH);
+	if (state == true) {
+//		if (arm_disabled_time + ARM_TIME_MIN_BREAK < millis()) {
+			digitalWrite(PIN_RELAY, HIGH); //zapni
 			arm_enabled_time = millis();
 			arm_disabled_time = 0;
-		}
+//		}
 	}
-	else {
-		digitalWrite(PIN_RELAY, HIGH);
-		digitalWrite(PIN_RELAY, LOW);
+	else { //disable
+		digitalWrite(PIN_RELAY, LOW); //vypni
 		arm_enabled_time = 0;
 		arm_disabled_time = millis();
 	}
 }
 
-//replace by constrain arduino funtion after logging will no longer be needed
+//replace by constrain arduino function after logging will no longer be needed
 uint32_t check_limits(uint32_t val, uint32_t min, uint32_t max) {
 
     if (min > max) {
@@ -126,15 +81,12 @@ uint32_t check_limits(uint32_t val, uint32_t min, uint32_t max) {
 }
 
 void armPreInit() {
-	Serial3.print("#10P1610T500\r\n"); delay(500);
-	Serial3.print("#3P2250T500\r\n"); delay(500);
-	Serial3.print("#4P1740T500\r\n"); delay(500);
-	Serial3.print("#5P1091T500\r\n"); delay(500);
-	Serial3.print("#1P1908T500\r\n"); delay(500);
-	Serial3.print("#10P1730T500\r\n"); delay(500);
-
-	Serial3.print("#11P700T1\r\n");  //set initial speed for shoulder 2
-	shoulder2 = 512; //set initial position for shoulder2
+	Serial3.print("#10P1495T500\r\n"); delay(500);
+	Serial3.print("#3P874T500\r\n"); delay(500);
+	Serial3.print("#4P1485T500\r\n"); delay(500);
+	Serial3.print("#5P1200T500\r\n"); delay(500);
+	Serial3.print("#1P1974T500\r\n"); delay(500);
+	//Serial3.print("#10P1730T500\r\n"); delay(500);
 }
 
 
@@ -150,7 +102,7 @@ void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow, uint32_t sh
 	String arm_elbow = "";
 	String arm_shoulder = "";
 	String arm_yaw = "";
-
+add_status_code(9);
 	//if arm power is off but a move request is received, enable power
 	if ( (getArmPower() == false) &&
 		(old_clamp != clamp ||
@@ -171,11 +123,6 @@ void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow, uint32_t sh
 	String time_to_complete_str = String(time_to_complete, DEC);
 	if (clamp != 0) {
 		arm_clamp = "#5P" + String(check_limits(clamp, ARM_MIN_CLAMP, ARM_MAX_CLAMP), DEC);
-		estimated_clamp_pos.orig_time = _nh->now();
-		estimated_clamp_pos.time_to_complete = time_to_complete;
-		estimated_clamp_pos.orig_pos = estimated_clamp_pos.target_pos;
-		estimated_clamp_pos.target_pos = check_limits(clamp, ARM_MIN_CLAMP, ARM_MAX_CLAMP);
-		estimated_clamp_pos.corrected = false;
 	}
 
 	if (roll != 0) {
@@ -188,8 +135,6 @@ void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow, uint32_t sh
 
 	if (shoulder != 0) {
 		arm_shoulder = "#10P" + String(check_limits(shoulder, ARM_MIN_SHOULDER, ARM_MAX_SHOULDER), DEC);
-		shoulder2 = 512; //TODO map from shoulder
-// otestuje servo   setMotorJoint(PIN_MOTOR_SHOULDER_0, PIN_MOTOR_SHOULDER_1, PIN_SERVO_SENSE_SHOULDER2, constrain(shoulder2, ARM_RES_MIN_SHOULDER2, ARM_RES_MAX_SHOULDER2));
 	}
 
 	if (yaw != 0) {
@@ -205,13 +150,6 @@ void armSetJointState(uint32_t clamp, uint32_t roll, uint32_t elbow, uint32_t sh
 
 void setup_arm(ros::NodeHandle *nh) {
 
-	estimated_clamp_pos.orig_time.sec = 0;
-	estimated_clamp_pos.orig_time.nsec = 0;
-	estimated_clamp_pos.time_to_complete = 0;
-	estimated_clamp_pos.orig_pos = 0;
-	estimated_clamp_pos.target_pos = 0;
-	estimated_clamp_pos.corrected = false;
-
         _nh = nh;
 	Serial3.begin(9600);
 	delay(100);
@@ -223,9 +161,9 @@ void setup_arm(ros::NodeHandle *nh) {
 
 	//power arm
 	pinMode(PIN_RELAY, OUTPUT);
-	digitalWrite(PIN_RELAY, HIGH);
+	setArmPower(true);
 	armPreInit();
-	digitalWrite(PIN_RELAY, LOW);  //turn off arm (as standby)
+	//setArmPower(false); //as standby
 
 }
 
@@ -237,50 +175,15 @@ void loop_arm(robik::GenericStatus& status_msg) {
 	status_msg.arm_roll = analogRead(PIN_SERVO_SENSE_ROLL);
 	status_msg.arm_clamp = analogRead(PIN_SERVO_SENSE_CLAMP);
 
-	status_msg.arm_fore_clamp =
-			digitalRead(PIN_ARM_FORE_CLAMP) == LOW ? true : false;
-	status_msg.arm_back_clamp =
-			digitalRead(PIN_ARM_BACK_CLAMP) == LOW ? true : false;
-	if (estimated_clamp_pos.corrected == false
-			&& (status_msg.arm_fore_clamp == true
-					|| status_msg.arm_back_clamp == true))
-		checkClampAndStop();
+	status_msg.arm_fore_clamp = digitalRead(PIN_ARM_FORE_CLAMP) == LOW ? true : false;
+	status_msg.arm_back_clamp = digitalRead(PIN_ARM_BACK_CLAMP) == LOW ? true : false;
 
 	//check arm power timeout to prevent overheat
-	if ((getArmPower() == true)
-			&& ((arm_enabled_time + ARM_TIME_MAX_ENABLED) < millis())) {
-		setArmPower(false);
+	if ((getArmPower() == true) && ((arm_enabled_time + ARM_TIME_MAX_ENABLED) < millis())) {
+		//setArmPower(false);
 	}
 
 }
 
-/*
-Postup ladeni
-- zapoj potenciometr serva do analogu a zapis min a max hodnotu
-- odladit smer otaceni, pak odstranit 100ms stop  //konfiguruj PWM stejne jako ohm
-- vyzkouset jestli shoulder2 se hybe stejne jako shoulder1
-*/
-
-//TODO pridej parametr effort
-void setMotorJoint(int pin0, int pin1, int pinsense, int target_ohm) {
-
-	int current_ohm = analogRead(pinsense);
-	//add_status_code(current_ohm);
-
-	int a0 = LOW;  //stop implicitly
-	int a1 = LOW;
-	if (current_ohm > target_ohm) {
-		a0 = HIGH;
-	}
-	else if (current_ohm < target_ohm) {
-		a1 = HIGH;
-	}
-	/*digitalWrite(pin0, a0);*/
-	/*digitalWrite(pin1, a1);*/
-
-	//delay(100);   //zastav motor pro 100ms dokud neodladis smer
-	/*digitalWrite(pin0, LOW);*/
-	/*digitalWrite(pin1, LOW);*/
-}
 
 #endif /* ROBIK_ARM_H_ */

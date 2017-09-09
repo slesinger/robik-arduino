@@ -94,7 +94,8 @@ void setup() {
 	setup_imu();
 
 	//ROS node
-	nh.getHardware()->setBaud(500000); //57600 115200 500000
+	long baud = 500000;
+	nh.getHardware()->setBaud(baud); //57600 115200 500000, need change in robik.launch as well
 	nh.initNode();
 	nh.subscribe(sub_generic_control);
 	nh.subscribe(sub_arm_control);
@@ -135,9 +136,9 @@ void loop() {
 	loop_arm(status_msg);
 
 	//lidar
-      	if ( (last_lidar_update + LIDAR_POWEROFF_TIMEOUT) < millis() ) {
-	  analogWrite(PIN_LIDAR_PWM, 0);
-	}
+      	//if ( (last_lidar_update + LIDAR_POWEROFF_TIMEOUT) < millis() ) {
+	//  analogWrite(PIN_LIDAR_PWM, 0);
+	//}
 
 	//motion detector
 	status_msg.motion_detector = motionDetector;
@@ -160,14 +161,12 @@ void loop() {
 
 	//thigs to be done frequently
 	jetsonPower();
-	add_status_code(lidar_curr_pwm);
-	add_status_code(lidar_curr_pwmd);
-	add_status_code(lidar_curr_pwmr);
+
 	//publish
 	pub_status.publish(&status_msg);
 	nh.spinOnce();
 	status_msg_clean();
-
+	delay(2);
 } //end of loop
 
 
@@ -214,14 +213,14 @@ void genericMessageListener(const robik::GenericControl& msg) {
 void lidarrpmMessageListener(const std_msgs::UInt16& msg) {
   int pwm_diff = 0;
   uint16_t i_rpm = msg.data;
-lidar_curr_pwmr = i_rpm;
+
   last_lidar_update = millis();
   if ( (i_rpm >= 60) && (i_rpm <=350) ) {
     int rpm_diff = LIDAR_TARGET_RPM - i_rpm;
     rpm_diff = constrain(rpm_diff, -50, 50);
     pwm_diff = map(rpm_diff,  -50, 50,  -5, 5);
     lidar_curr_pwm += pwm_diff;
-lidar_curr_pwmd = pwm_diff;
+
   }
   else { // else we do not have rpm value or we do not trust the value
     lidar_curr_pwm = LIDAR_INIT_PWM; 

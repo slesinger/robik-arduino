@@ -9,24 +9,22 @@
 #ifndef ROBIK_MOVE_H_
 #define ROBIK_MOVE_H_
 
-void velocity_control_VelTh(float vel, float th);
-void velocity_control_LR();
+//void velocity_control_VelTh(float vel, float th);
+void velocity_control_LR2();
 
 int motor_left_dir = 1; //direction for motor expected to go. 1 means forward
 int motor_right_dir = 1;
 double req_motor_left = 0; //store required wheel velocity
 double req_motor_right = 0;
-double old_motor_left = 0; //store to compare if speed changed since last cmd_vel
-double old_motor_right = 0;
-long odom_ticks_left_since_cmd = 0;
-long odom_ticks_right_since_cmd = 0;
+double debt_motor_left = 0; //store to compare if speed changed since last cmd_vel
+double debt_motor_right = 0;
 int odom_ticks_left = 0;
 int odom_ticks_right = 0;
-unsigned long millis_since_cmd = 0;
+unsigned long millis_since = 0;
 
 void intr_left_encoder();
 void intr_right_encoder();
-int motor_vel_to_pwm(double vel);
+//int motor_vel_to_pwm(double vel);
 
 
 void setup_move() {
@@ -46,6 +44,7 @@ void setup_move() {
 	pinMode(PIN_MOTOR_RIGHT_0, OUTPUT);
 	pinMode(PIN_MOTOR_RIGHT_1, OUTPUT);
 
+	millis_since = millis();
 
 }
 
@@ -57,12 +56,12 @@ void loop_move(robik::GenericStatus& status_msg) {
 	odom_ticks_right = 0;
 
 	//wheels are expected to move but robot is stopped
-	velocity_control_LR();
+	velocity_control_LR2();
 
 }
 
 
-
+/*
 // vel: linear velocity [m/sec]
 // theta: angular velocity [rad/sec]
 void velocity_control_VelTh(float vel, float th) {
@@ -183,25 +182,77 @@ void velocity_control_LR() {
 	//add_status_code(correction_motor_right);
 	//add_status_code(corrected_motor_right);
 }
+*/
+
+void velocity_control_LR2() {
+
+        //Delta time since last call
+	unsigned long millis_delta = millis() - millis_since;
+	millis_since = millis();
+
+	//How much ticks it shall drive within the time
+	double incr_left  = req_motor_left  * millis_delta; //[delta ticks]
+	double incr_right = req_motor_right * millis_delta;
+
+	//Adjust ticks debt, positive or negative. positive debt means it should go forward
+	debt_motor_left  += incr_left; //[ticks]
+	debt_motor_right += incr_right;
+	
+	//Calculate PWM from debt
+	unsigned int left_pwm  = map( abs(debt_motor_left ) ,  0, 1.4,  0, 199);
+	unsigned int right_pwm = map( abs(debt_motor_right) ,  0, 1.4,  0, 199);
+
+	//derive direction from original speed
+	//left
+	int a0 = LOW;  //stop implicitly
+	int a1 = LOW;
+	if (debt_motor_left < 0) {
+		a0 = HIGH;
+		motor_left_dir = -1;
+	}
+	if (debt_motor_left > 0) {
+		a1 = HIGH;
+		motor_left_dir = 1;
+	}
+	digitalWrite(PIN_MOTOR_LEFT_0, a0);
+	digitalWrite(PIN_MOTOR_LEFT_1, a1);
+	analogWrite(PIN_MOTOR_LEFT_ENA, constrain(left_pwm, 0, MOTOR_MAX));
+
+	//right
+	a0 = LOW;
+	a1 = LOW;
+	if (req_motor_right < 0) {
+		a0 = HIGH;
+		motor_right_dir = -1;
+	}
+	if (req_motor_right > 0) {
+		a1 = HIGH;
+		motor_right_dir = 1;
+	}
+	digitalWrite(PIN_MOTOR_RIGHT_0, a0);
+	digitalWrite(PIN_MOTOR_RIGHT_1, a1);
+	analogWrite(PIN_MOTOR_RIGHT_ENA, constrain(right_pwm, 0, MOTOR_MAX));
+	//add_status_code(left_pwm);
+	//add_status_code(right_pwm);
+}
 
 //Input received from diff_drive_controller
 void velocityMessageListener(const robik::VelocityControl& msg) {
-	req_motor_left = constrain(msg.motor_left, -MAX_VEL, MAX_VEL);
-	req_motor_right = constrain(msg.motor_right, -MAX_VEL, MAX_VEL);
-	velocity_control_LR();
+  double left_m_s = constrain(msg.motor_left, -MAX_VEL, MAX_VEL);  //[m/s]
+  double right_m_s = constrain(msg.motor_right, -MAX_VEL, MAX_VEL);
+  req_motor_left = left_m_s / TICK_LENGTH_MM;  //[ticks/millissec required speed]
+  req_motor_right = right_m_s / TICK_LENGTH_MM;
 }
 
 //odometry encoders
 void intr_left_encoder() {
-
-	odom_ticks_left++;
-	odom_ticks_left_since_cmd++;
+  odom_ticks_left++;
+  debt_motor_left -= motor_left_dir; //reducing debt
 }
 
 void intr_right_encoder() {
-
-	odom_ticks_right++;
-	odom_ticks_right_since_cmd++;
+  odom_ticks_right++;
+  debt_motor_right -= motor_right_dir; //reducing debt
 }
 
 #endif /* ROBIK_MOVE_H_ */

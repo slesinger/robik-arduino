@@ -59,8 +59,8 @@
 #define PIN_ARM_FORE_CLAMP 36
 #define PIN_ARM_BACK_CLAMP 37
 
-#define ARM_TIME_MAX_ENABLED 60000 //milliseconds, how long can arm power be enabled at maximum, it powers off automatically after this
-#define ARM_TIME_MIN_BREAK 60000 //milliseconds, minimum amount of time that arm needs to rest
+#define ARM_TIME_MAX_ENABLED 90000 //milliseconds, how long can arm power be enabled at maximum, it powers off automatically after this
+#define ARM_TIME_MIN_BREAK 20000 //milliseconds, minimum amount of time that arm needs to rest
 
 //!!!! nastavit jestli se to nehodi na desce. Jinak zjisteno, ze tyto piny jsou volne.
 #define PIN_SERVO_SENSE_SHOULDER2 A8 
